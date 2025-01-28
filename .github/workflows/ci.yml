@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Validate files
+      run: |
+        test -f manifest.json
+        test -f content.js
+        test -d icons
+    
+    - name: Check manifest.json format
+      run: |
+        cat manifest.json | jq '.' > /dev/null
+
+    - name: Create release package
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        zip -r chase-offer-adder.zip . -x "*.git*" "*.github*" "*.DS_Store" 
