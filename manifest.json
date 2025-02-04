@@ -26,6 +26,5 @@
   ],
   "host_permissions": [
     "https://secure.chase.com/*"
-  ],
-  "permissions": ["activeTab"]
+  ]
 } 
