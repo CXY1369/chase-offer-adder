@@ -305,12 +305,31 @@ function findFirstUnofficialOffer() {
     
     // 方法0：特别处理"+"按钮，这是最直接的特征
     console.log('使用方法0寻找蓝色加号按钮...');
-    const plusButtons = document.querySelectorAll('button svg[fill="rgb(17, 122, 202)"], button svg[fill="#117ACA"], [role="button"] svg[fill="rgb(17, 122, 202)"], [aria-label="Add"] svg');
+    const plusButtonSelectors = [
+        'button svg[fill="rgb(17, 122, 202)"]', 
+        'button svg[fill="#117ACA"]', 
+        '[role="button"] svg[fill="rgb(17, 122, 202)"]', 
+        '[aria-label="Add"] svg',
+        'button svg[fill="blue"]',
+        'button svg[fill="rgb(0, 0, 255)"]',
+        'svg[fill="rgb(17, 122, 202)"]',
+        'svg[fill="#117ACA"]'
+    ];
     
-    if (plusButtons.length > 0) {
-        console.log(`找到 ${plusButtons.length} 个加号按钮`);
-        for (const svg of plusButtons) {
-            const button = svg.closest('button') || svg.closest('[role="button"]');
+    const allPlusButtons = [];
+    for (const selector of plusButtonSelectors) {
+        const buttons = document.querySelectorAll(selector);
+        if (buttons.length > 0) {
+            console.log(`选择器 ${selector} 找到 ${buttons.length} 个按钮`);
+            buttons.forEach(btn => allPlusButtons.push(btn));
+        }
+    }
+    
+    console.log(`总共找到 ${allPlusButtons.length} 个可能的加号按钮`);
+    
+    if (allPlusButtons.length > 0) {
+        for (const svg of allPlusButtons) {
+            const button = svg.closest('button') || svg.closest('[role="button"]') || svg.closest('a') || svg.parentElement;
             if (button && !button.disabled && !isElementHidden(button)) {
                 // 向上查找父元素，确认这是优惠卡片
                 const card = findParentCard(button);
@@ -318,48 +337,146 @@ function findFirstUnofficialOffer() {
                     // 检查卡片是否有绿色对勾，如果有就跳过
                     const hasCheckmark = Array.from(card.querySelectorAll('*')).some(el => {
                         const style = window.getComputedStyle(el);
+                        const text = el.textContent || '';
                         return style.color.includes('rgb(0, 128') || // 绿色
                                style.color.includes('rgb(33, 150') || // 绿色
                                style.color.includes('rgb(46, 125') || // 绿色
+                               text.includes('Added') ||
+                               text.includes('Activated') ||
+                               text.includes('Done') ||
                                el.innerHTML.includes('✓');
                     });
                     
                     if (!hasCheckmark) {
                         console.log('找到未添加的优惠券加号按钮:', button);
                         return button;
+                    } else {
+                        console.log('发现带有已添加标记的卡片，跳过');
                     }
                 } else {
-                    console.log('找到未添加的直接加号按钮:', button);
-                    return button;
+                    // 如果无法确定是否在卡片内，也检查按钮本身是否有"添加"相关标识
+                    const buttonText = button.textContent || '';
+                    const ariaLabel = button.getAttribute('aria-label') || '';
+                    const title = button.getAttribute('title') || '';
+                    
+                    if (buttonText.includes('Add') || 
+                        ariaLabel.includes('Add') || 
+                        title.includes('Add') ||
+                        buttonText === '+') {
+                        console.log('找到未添加的直接加号按钮:', button);
+                        return button;
+                    }
                 }
             }
         }
     }
     
-    // 如果没有找到蓝色加号按钮，则直接返回null，不再继续查找
-    // 之前的方法可能会误报并点击已添加的优惠券导致页面跳转
-    console.log('没有找到蓝色加号按钮的未添加优惠券，认为所有优惠券已添加完成');
-    return null;
-
-    // 以下代码被注释掉，不再使用其他方法查找优惠券
-    /*
-    // 方法1：使用 data-testid 属性搜索，这是最准确的方法
-    const offerElements = document.querySelectorAll('div[data-testid="offer-card"], div[data-testid*="offer"], [data-testid*="Offer"]');
-    console.log(`方法1找到 ${offerElements.length} 个可能的优惠券元素`);
+    // 方法1: 查找带有"Add"文本的按钮，但必须确认它不是已添加的优惠券
+    console.log('使用方法1寻找带Add文本的按钮...');
+    const addTextButtons = document.querySelectorAll('button, [role="button"], a[role="button"]');
     
-    // 如果找到了可能的优惠券元素，尝试处理它们
-    if (offerElements.length > 0) {
-        for (const card of offerElements) {
-            try {
-                // 更多代码...
-            } catch (error) {
-                console.error('处理卡片时出错:', error);
+    for (const button of addTextButtons) {
+        if (button.disabled || isElementHidden(button)) continue;
+        
+        const buttonText = button.textContent || '';
+        const ariaLabel = button.getAttribute('aria-label') || '';
+        const title = button.getAttribute('title') || '';
+        
+        // 检查是否包含"Add"文本
+        const hasAddText = buttonText.includes('Add') || 
+                          ariaLabel.includes('Add') || 
+                          title.includes('Add') ||
+                          buttonText === '+';
+                          
+        // 检查是否已添加（避免点击带有"Added"等文本的按钮）
+        const alreadyAdded = buttonText.includes('Added') || 
+                            buttonText.includes('Activated') || 
+                            buttonText.includes('Done') || 
+                            buttonText.includes('✓') ||
+                            ariaLabel.includes('Added') ||
+                            title.includes('Added');
+        
+        if (hasAddText && !alreadyAdded) {
+            const card = findParentCard(button);
+            if (card) {
+                // 再次检查卡片是否有已添加标记
+                const hasCheckmark = Array.from(card.querySelectorAll('*')).some(el => {
+                    const style = window.getComputedStyle(el);
+                    const text = el.textContent || '';
+                    return style.color.includes('rgb(0, 128') || // 绿色
+                           style.color.includes('rgb(33, 150') || // 绿色
+                           style.color.includes('rgb(46, 125') || // 绿色
+                           text.includes('Added') ||
+                           text.includes('Activated') ||
+                           text.includes('Done') ||
+                           el.innerHTML.includes('✓');
+                });
+                
+                if (!hasCheckmark) {
+                    console.log('方法1找到未添加的优惠券按钮:', button);
+                    return button;
+                }
+            } else {
+                console.log('方法1找到未添加的直接按钮:', button);
+                return button;
             }
         }
     }
     
-    // 方法2, 方法3, 方法4...
-    */
+    // 方法2: 查找蓝色按钮
+    console.log('使用方法2寻找蓝色按钮...');
+    const allButtons = document.querySelectorAll('button, [role="button"], a[role="button"]');
+    for (const button of allButtons) {
+        if (button.disabled || isElementHidden(button)) continue;
+        
+        const style = window.getComputedStyle(button);
+        const backgroundColor = style.backgroundColor || '';
+        const borderColor = style.borderColor || '';
+        const color = style.color || '';
+        
+        // 检查是否为蓝色系
+        const isBlue = backgroundColor.includes('rgb(17, 122, 202)') || // Chase 蓝色
+                      backgroundColor.includes('rgb(0, 0, 255)') ||
+                      backgroundColor.includes('rgb(33, 86, 143)') ||
+                      borderColor.includes('rgb(17, 122, 202)') ||
+                      color.includes('rgb(17, 122, 202)');
+        
+        // 检查是否已添加
+        const buttonText = button.textContent || '';
+        const alreadyAdded = buttonText.includes('Added') || 
+                            buttonText.includes('Activated') || 
+                            buttonText.includes('Done') || 
+                            buttonText.includes('✓');
+        
+        if (isBlue && !alreadyAdded) {
+            const card = findParentCard(button);
+            if (card) {
+                // 再次检查卡片是否有已添加标记
+                const hasCheckmark = Array.from(card.querySelectorAll('*')).some(el => {
+                    const style = window.getComputedStyle(el);
+                    const text = el.textContent || '';
+                    return style.color.includes('rgb(0, 128') || // 绿色
+                           style.color.includes('rgb(33, 150') || // 绿色
+                           style.color.includes('rgb(46, 125') || // 绿色
+                           text.includes('Added') ||
+                           text.includes('Activated') ||
+                           text.includes('Done') ||
+                           el.innerHTML.includes('✓');
+                });
+                
+                if (!hasCheckmark) {
+                    console.log('方法2找到未添加的优惠券按钮:', button);
+                    return button;
+                }
+            } else {
+                console.log('方法2找到未添加的直接按钮:', button);
+                return button;
+            }
+        }
+    }
+    
+    console.log('没有找到未添加的优惠券按钮，检查了所有可能的方法');
+    return null;
 }
 
 // 辅助函数：检查元素是否隐藏
@@ -588,4 +705,4 @@ function delay(ms) {
 }
 
 // 输出初始化日志
-console.log('Chase Offer Helper v1.0.8 已加载'); 
+console.log('Chase Offer Helper v1.0.9 已加载'); 
